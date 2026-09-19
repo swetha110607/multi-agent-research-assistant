@@ -51,41 +51,53 @@ def synthesis_agent(topic: str, search_summary: str, fact_check_results: list, s
 
 def orchestrator(topic: str, pdf_path: str = None) -> dict:
     """
-    Runs the full pipeline: search -> summarize -> fast-check -> synthesize.
+    Runs the research pipeline.
+    If a PDF is uploaded, use the PDF directly.
+    Otherwise, run the normal web research pipeline.
     """
-    print(f"\n Starting research pipline for : {topic}\n")
+
+    print(f"\nStarting research pipeline for: {topic}\n")
+
+    # If a PDF is uploaded, use the PDF RAG pipeline
+    if pdf_path:
+        print("PDF uploaded. Reading the PDF....")
+
+        pdf_result = paper_reader_agent(
+            pdf_path,
+            question=topic
+        )
+
+        print("PDF analysis completed!!\n")
+
+        return {
+            "topic": topic,
+            "final_report": pdf_result["answer"],
+            "used_pdf": True
+        }
 
     # 1: Web search
     print("Step 1/4: Searching the web....")
     search_result = web_search_agent(topic)
 
-    # optional
-    pdf_insights = None
-    if pdf_path:
-        print("Extra step: Reading uploaded PDF....")
-        pdf_result = paper_reader_agent(pdf_path, question=f"What does this document say about {topic}?")
-        pdf_insights = pdf_result["answer"]
-
-
     # 2: Summarize
     print("Step 2/4: Summarizing findings....")
-    combined_content = search_result["summary"]
-    if pdf_insights:
-        combined_content += f"\n\nAdditonal insights from uploaded document:\n{pdf_insights}"
+
     summary_result = summarizer_agent(
-        content=combined_content,
+        content=search_result["summary"],
         source_label=topic
     )
 
-    # 3: Fast-check key claims from summary
-    print("Step 3/4: Fast-checking key claims....")
+    # 3: Fact-check key claims
+    print("Step 3/4: Fact-checking key claims....")
+
     fact_check_result = fact_checker_agent(
         claim=summary_result["summary"],
-        supporting_context=combined_content
+        supporting_context=search_result["summary"]
     )
 
     # 4: Synthesize final report
     print("Step 4/4: Writing final report....")
+
     final_report = synthesis_agent(
         topic=topic,
         search_summary=summary_result["summary"],
@@ -96,9 +108,9 @@ def orchestrator(topic: str, pdf_path: str = None) -> dict:
     print("PIPELINE COMPLETED!!\n")
 
     return {
-        "topic" : topic,
-        "final_report" : final_report,
-        "used_pdf" : pdf_path is not None
+        "topic": topic,
+        "final_report": final_report,
+        "used_pdf": False
     }
 
 # Test the full pipeline
